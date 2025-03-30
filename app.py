@@ -3,23 +3,39 @@ from flask_cors import CORS
 from scipy.integrate import quad
 from sympy import sympify, symbols, lambdify
 import numpy as np
+import os
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS
+
+# Enable CORS for specific origins (Modify "*" to allow only specific domains)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 @app.route('/', methods=['GET'])
 def home():
-    return render_template('index.html')  # Make sure 'index.html' is inside the 'templates/' folder
+    if not os.path.exists("templates/index.html"):
+        return jsonify({'error': "index.html not found in templates folder"}), 500
+    return render_template('index.html')
 
 @app.route('/integrate', methods=['POST'])
 def integrate():
     try:
-        data = request.json
-        function_input = data['function']
-        lo = float(data['lower_limit'])
-        hi = float(data['upper_limit'])
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data received'}), 400
 
-        # Replace 'e' with sympy's exp(1)
+        function_input = data.get('function', '').strip()
+        if not function_input:
+            return jsonify({'error': 'Function is required'}), 400
+
+        lo = data.get('lower_limit')
+        hi = data.get('upper_limit')
+
+        if lo is None or hi is None:
+            return jsonify({'error': 'Both lower and upper limits are required'}), 400
+
+        lo, hi = float(lo), float(hi)
+
+        # Replace 'e' with sympy's exp(1) for correct parsing
         function_input = function_input.replace('e', 'exp(1)')
         x = symbols('x')
         parsed_function = sympify(function_input)
@@ -31,9 +47,9 @@ def integrate():
         result, _ = quad(func, lo, hi)
         
         return jsonify({'result': result})
-    
+
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
